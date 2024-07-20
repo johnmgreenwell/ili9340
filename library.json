@@ -1,0 +1,21 @@
+{
+    "name": "pcd8544",
+    "version": "1.0.0",
+    "description": "Portable, multi-instance driver for PCD8544 LCDs",
+    "keywords": "embedded, driver, hal, lcd, nokia",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/johnmgreenwell/pcd8544"
+    },
+    "license": "MIT",
+    "frameworks": "*",
+    "platforms": "*",
+	"dependencies": {
+        "Adafruit GFX Library": "https://github.com/adafruit/Adafruit-GFX-Library.git"
+    },
+    "build": {
+        "flags": [
+        "-I../../include"
+        ]
+    }
+}
