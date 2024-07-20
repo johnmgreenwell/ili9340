@@ -12,117 +12,94 @@
 
   Written by Limor Fried/Ladyada for Adafruit Industries.
   MIT license, all text above must be included in any redistribution
+
+    Modified to add support for custom HAL support, John Greenwell 2024
  ****************************************************/
 
-#include "Adafruit_ILI9340.h"
-#ifdef __AVR
-  #include <avr/pgmspace.h>
-#elif defined(ESP8266)
-  #include <pgmspace.h>
-#endif
+#include "ili9340.h"
 
 #include <limits.h>
 #include "pins_arduino.h"
 #include "wiring_private.h"
 #include <SPI.h>
 
-#if defined(__SAM3X8E__)
-#include <include/pio.h>
-  #define SET_BIT(port, bitMask) (port)->PIO_SODR |= (bitMask)
-  #define CLEAR_BIT(port, bitMask) (port)->PIO_CODR |= (bitMask)
-  #define USE_SPI_LIBRARY
-#endif
-#ifdef __AVR__
-  #define SET_BIT(port, bitMask) *(port) |= (bitMask)
-  #define CLEAR_BIT(port, bitMask) *(port) &= ~(bitMask)
-#endif
-#if (defined(__arm__) && defined(CORE_TEENSY)) || defined(ESP8266)
-  #define USE_SPI_LIBRARY
-  #define SET_BIT(port, bitMask) digitalWrite(*(port), HIGH);
-  #define CLEAR_BIT(port, bitMask) digitalWrite(*(port), LOW);
-#endif
+namespace PeripheralIO
+{
 
-// Constructor when using software SPI.  All output pins are configurable.
-Adafruit_ILI9340::Adafruit_ILI9340(uint8_t cs, uint8_t dc, uint8_t mosi,
-				   uint8_t sclk, uint8_t rst, uint8_t miso) : Adafruit_GFX(ILI9340_TFTWIDTH, ILI9340_TFTHEIGHT) {
-  _cs   = cs;
-  _dc   = dc;
-  _mosi  = mosi;
-  _miso = miso;
-  _sclk = sclk;
-  _rst  = rst;
-  hwSPI = false;
-}
+ILI9340::ILI9340(HAL::SPI& spi, uint8_t cs, uint8_t dc, uint8_t rst)
+: Adafruit_GFX(ILI9340_TFTWIDTH, ILI9340_TFTHEIGHT)
+, _spi(spi)
+, _cs(cs)
+, _dc(dc)
+, _rst(rst)
+{ }
 
-
-// Constructor when using hardware SPI.  Faster, but must use SPI pins
-// specific to each board type (e.g. 11,13 for Uno, 51,52 for Mega, etc.)
-Adafruit_ILI9340::Adafruit_ILI9340(uint8_t cs, uint8_t dc, uint8_t rst) : Adafruit_GFX(ILI9340_TFTWIDTH, ILI9340_TFTHEIGHT) {
-  _cs   = cs;
-  _dc   = dc;
-  _rst  = rst;
-  hwSPI = true;
-  _mosi  = _sclk = 0;
-}
-
-void Adafruit_ILI9340::spiwrite(uint8_t c) {
+void ILI9340::spiwrite(uint8_t c) {
 
   //Serial.print("0x"); Serial.print(c, HEX); Serial.print(", ");
 
-  if (hwSPI) {
-#ifdef __AVR__
-    SPDR = c;
-    while(!(SPSR & _BV(SPIF)));
-#endif
-#if defined(USE_SPI_LIBRARY)
-    SPI.transfer(c);
-#endif
-  } else {
-    // Fast SPI bitbang swiped from LPD8806 library
-    for(uint8_t bit = 0x80; bit; bit >>= 1) {
-      if(c & bit) {
-        //digitalWrite(_mosi, HIGH); 
-        SET_BIT(mosiport, mosipinmask);
-      } else {
-        //digitalWrite(_mosi, LOW); 
-        CLEAR_BIT(mosiport, mosipinmask);
-      }
-      //digitalWrite(_sclk, HIGH);
-      SET_BIT(clkport, clkpinmask);
-      //digitalWrite(_sclk, LOW);
-      CLEAR_BIT(clkport, clkpinmask);
-    }
-  }
+    _spi.transfer(c);
+
+//   if (hwSPI) {
+// #ifdef __AVR__
+//     SPDR = c;
+//     while(!(SPSR & _BV(SPIF)));
+// #endif
+// #if defined(USE_SPI_LIBRARY)
+//     SPI.transfer(c);
+// #endif
+//   } else {
+//     // Fast SPI bitbang swiped from LPD8806 library
+//     for(uint8_t bit = 0x80; bit; bit >>= 1) {
+//       if(c & bit) {
+//         //digitalWrite(_mosi, HIGH); 
+//         SET_BIT(mosiport, mosipinmask);
+//       } else {
+//         //digitalWrite(_mosi, LOW); 
+//         CLEAR_BIT(mosiport, mosipinmask);
+//       }
+//       //digitalWrite(_sclk, HIGH);
+//       SET_BIT(clkport, clkpinmask);
+//       //digitalWrite(_sclk, LOW);
+//       CLEAR_BIT(clkport, clkpinmask);
+//     }
+//   }
 }
 
 
-void Adafruit_ILI9340::writecommand(uint8_t c) {
-  CLEAR_BIT(dcport, dcpinmask);
+void ILI9340::writecommand(uint8_t c) {
+  _dc.digitalWrite(false);
+  //CLEAR_BIT(dcport, dcpinmask);
   //digitalWrite(_dc, LOW);
-  CLEAR_BIT(clkport, clkpinmask);
+  //CLEAR_BIT(clkport, clkpinmask);
   //digitalWrite(_sclk, LOW);
-  CLEAR_BIT(csport, cspinmask);
+  _cs.digitalWrite(false);
+  //CLEAR_BIT(csport, cspinmask);
   //digitalWrite(_cs, LOW);
 
   spiwrite(c);
 
-  SET_BIT(csport, cspinmask);
+  _cs.digitalWrite(true);
+  //SET_BIT(csport, cspinmask);
   //digitalWrite(_cs, HIGH);
 }
 
 
-void Adafruit_ILI9340::writedata(uint8_t c) {
-  SET_BIT(dcport,  dcpinmask);
+void ILI9340::writedata(uint8_t c) {
+  _dc.digitalWrite(true);
+  //SET_BIT(dcport,  dcpinmask);
   //digitalWrite(_dc, HIGH);
-  CLEAR_BIT(clkport, clkpinmask);
+  //CLEAR_BIT(clkport, clkpinmask);
   //digitalWrite(_sclk, LOW);
-  CLEAR_BIT(csport, cspinmask);
+  _cs.digitalWrite(false);
+  //CLEAR_BIT(csport, cspinmask);
   //digitalWrite(_cs, LOW);
   
   spiwrite(c);
 
+  _cs.digitalWrite(true);
   //digitalWrite(_cs, HIGH);
-  SET_BIT(csport, cspinmask);
+  //SET_BIT(csport, cspinmask);
 } 
 
 // Rather than a bazillion writecommand() and writedata() calls, screen
@@ -134,7 +111,7 @@ void Adafruit_ILI9340::writedata(uint8_t c) {
 
 // Companion code to the above tables.  Reads and issues
 // a series of LCD commands stored in PROGMEM byte array.
-void Adafruit_ILI9340::commandList(uint8_t *addr) {
+void ILI9340::commandList(uint8_t *addr) {
 
   uint8_t  numCommands, numArgs;
   uint16_t ms;
@@ -158,65 +135,24 @@ void Adafruit_ILI9340::commandList(uint8_t *addr) {
 }
 
 
-void Adafruit_ILI9340::begin(void) {
-  pinMode(_rst, OUTPUT);
-  digitalWrite(_rst, LOW);
-  pinMode(_dc, OUTPUT);
-  pinMode(_cs, OUTPUT);
-#ifdef __AVR__
-  csport    = portOutputRegister(digitalPinToPort(_cs));
-  dcport    = portOutputRegister(digitalPinToPort(_dc));
-#endif
-#if defined(__SAM3X8E__)
-  csport    = digitalPinToPort(_cs);
-  dcport    = digitalPinToPort(_dc);
-#endif
-#if (defined(__arm__) && defined(CORE_TEENSY)) || defined(ESP8266)
-  mosiport = &_mosi;
-  clkport = &_sclk;
-  rsport = &_rst;
-  csport    = &_cs;
-  dcport    = &_dc;
-#endif
-  cspinmask = digitalPinToBitMask(_cs);
-  dcpinmask = digitalPinToBitMask(_dc);
-
-  if(hwSPI) { // Using hardware SPI
-    SPI.begin();
-#if defined(__AVR__) || defined(ESP8266)
-    SPI.setClockDivider(SPI_CLOCK_DIV2); // 8 MHz (full! speed!)
-#endif
-#if defined(__SAM3X8E__)
-    SPI.setClockDivider(11); // 85MHz / 11 = 7.6 MHz (full! speed!)
-#endif
-    SPI.setBitOrder(MSBFIRST);
-    SPI.setDataMode(SPI_MODE0);
-  } else {
-    pinMode(_sclk, OUTPUT);
-    pinMode(_mosi, OUTPUT);
-    pinMode(_miso, INPUT);
-#ifdef __AVR__
-    clkport     = portOutputRegister(digitalPinToPort(_sclk));
-    mosiport    = portOutputRegister(digitalPinToPort(_mosi));
-#endif
-#if defined(__SAM3X8E__)
-    clkport     = digitalPinToPort(_sclk);
-    mosiport    = digitalPinToPort(_mosi);
-#endif
-    clkpinmask  = digitalPinToBitMask(_sclk);
-    mosipinmask = digitalPinToBitMask(_mosi);
-    CLEAR_BIT(clkport, clkpinmask);
-    CLEAR_BIT(mosiport, mosipinmask);
-  }
+void ILI9340::begin(void) {
+  //pinMode(_rst, OUTPUT);
+  //digitalWrite(_rst, LOW);
+  //pinMode(_dc, OUTPUT);
+  //pinMode(_cs, OUTPUT);
+  _rst.pinMode(GPIO_OUTPUT);
+  _rst.digitalWrite(false);
+  _dc.pinMode(GPIO_OUTPUT);
+  _cs.pinMode(GPIO_OUTPUT);
 
   // toggle RST low to reset
 
-  digitalWrite(_rst, HIGH);
-  delay(5);
-  digitalWrite(_rst, LOW);
-  delay(20);
-  digitalWrite(_rst, HIGH);
-  delay(150);
+  _rst.digitalWrite(true);
+  HAL::delay_ms(5);
+  _rst.digitalWrite(false);
+  HAL::delay_ms(20);
+  _rst.digitalWrite(true);
+  HAL::delay_ms(150);
 
   /*
   uint8_t x = readcommand8(ILI9340_RDMODE);
@@ -342,7 +278,7 @@ void Adafruit_ILI9340::begin(void) {
 }
 
 
-void Adafruit_ILI9340::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1,
+void ILI9340::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1,
  uint16_t y1) {
 
   writecommand(ILI9340_CASET); // Column addr set
@@ -361,39 +297,45 @@ void Adafruit_ILI9340::setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1,
 }
 
 
-void Adafruit_ILI9340::pushColor(uint16_t color) {
+void ILI9340::pushColor(uint16_t color) {
+  _dc.digitalWrite(true);
   //digitalWrite(_dc, HIGH);
-  SET_BIT(dcport, dcpinmask);
+  //SET_BIT(dcport, dcpinmask);
+  _cs.digitalWrite(false);
   //digitalWrite(_cs, LOW);
-  CLEAR_BIT(csport, cspinmask);
+  //CLEAR_BIT(csport, cspinmask);
 
   spiwrite(color >> 8);
   spiwrite(color);
 
-  SET_BIT(csport, cspinmask);
+  _cs.digitalWrite(true);
+  //SET_BIT(csport, cspinmask);
   //digitalWrite(_cs, HIGH);
 }
 
-void Adafruit_ILI9340::drawPixel(int16_t x, int16_t y, uint16_t color) {
+void ILI9340::drawPixel(int16_t x, int16_t y, uint16_t color) {
 
   if((x < 0) ||(x >= _width) || (y < 0) || (y >= _height)) return;
 
   setAddrWindow(x,y,x+1,y+1);
 
+  _dc.digitalWrite(true);
   //digitalWrite(_dc, HIGH);
-  SET_BIT(dcport, dcpinmask);
+  //SET_BIT(dcport, dcpinmask);
+  _cs.digitalWrite(false);
   //digitalWrite(_cs, LOW);
-  CLEAR_BIT(csport, cspinmask);
+  //CLEAR_BIT(csport, cspinmask);
 
   spiwrite(color >> 8);
   spiwrite(color);
 
-  SET_BIT(csport, cspinmask);
+  _cs.digitalWrite(false);
+  //SET_BIT(csport, cspinmask);
   //digitalWrite(_cs, HIGH);
 }
 
 
-void Adafruit_ILI9340::drawFastVLine(int16_t x, int16_t y, int16_t h,
+void ILI9340::drawFastVLine(int16_t x, int16_t y, int16_t h,
  uint16_t color) {
 
   // Rudimentary clipping
@@ -406,21 +348,24 @@ void Adafruit_ILI9340::drawFastVLine(int16_t x, int16_t y, int16_t h,
 
   uint8_t hi = color >> 8, lo = color;
 
-  SET_BIT(dcport, dcpinmask);
+  _dc.digitalWrite(true);
+  //SET_BIT(dcport, dcpinmask);
   //digitalWrite(_dc, HIGH);
-  CLEAR_BIT(csport, cspinmask);
+  _cs.digitalWrite(false);
+  //CLEAR_BIT(csport, cspinmask);
   //digitalWrite(_cs, LOW);
 
   while (h--) {
     spiwrite(hi);
     spiwrite(lo);
   }
-  SET_BIT(csport, cspinmask);
+  _cs.digitalWrite(true);
+  //SET_BIT(csport, cspinmask);
   //digitalWrite(_cs, HIGH);
 }
 
 
-void Adafruit_ILI9340::drawFastHLine(int16_t x, int16_t y, int16_t w,
+void ILI9340::drawFastHLine(int16_t x, int16_t y, int16_t w,
   uint16_t color) {
 
   // Rudimentary clipping
@@ -429,24 +374,27 @@ void Adafruit_ILI9340::drawFastHLine(int16_t x, int16_t y, int16_t w,
   setAddrWindow(x, y, x+w-1, y);
 
   uint8_t hi = color >> 8, lo = color;
-  SET_BIT(dcport, dcpinmask);
-  CLEAR_BIT(csport, cspinmask);
+  _dc.digitalWrite(true);
+  //SET_BIT(dcport, dcpinmask);
+  _cs.digitalWrite(false);
+  //CLEAR_BIT(csport, cspinmask);
   //digitalWrite(_dc, HIGH);
   //digitalWrite(_cs, LOW);
   while (w--) {
     spiwrite(hi);
     spiwrite(lo);
   }
-  SET_BIT(csport, cspinmask);
+  _cs.digitalWrite(true);
+  //SET_BIT(csport, cspinmask);
   //digitalWrite(_cs, HIGH);
 }
 
-void Adafruit_ILI9340::fillScreen(uint16_t color) {
+void ILI9340::fillScreen(uint16_t color) {
   fillRect(0, 0,  _width, _height, color);
 }
 
 // fill a rectangle
-void Adafruit_ILI9340::fillRect(int16_t x, int16_t y, int16_t w, int16_t h,
+void ILI9340::fillRect(int16_t x, int16_t y, int16_t w, int16_t h,
   uint16_t color) {
 
   // rudimentary clipping (drawChar w/big text requires this)
@@ -458,9 +406,11 @@ void Adafruit_ILI9340::fillRect(int16_t x, int16_t y, int16_t w, int16_t h,
 
   uint8_t hi = color >> 8, lo = color;
 
-  SET_BIT(dcport, dcpinmask);
+  _dc.digitalWrite(true);
+  //SET_BIT(dcport, dcpinmask);
   //digitalWrite(_dc, HIGH);
-  CLEAR_BIT(csport, cspinmask);
+  _cs.digitalWrite(false);
+  //CLEAR_BIT(csport, cspinmask);
   //digitalWrite(_cs, LOW);
 
   for(y=h; y>0; y--) {
@@ -469,18 +419,19 @@ void Adafruit_ILI9340::fillRect(int16_t x, int16_t y, int16_t w, int16_t h,
       spiwrite(lo);
     }
   }
+  _cs.digitalWrite(true);
   //digitalWrite(_cs, HIGH);
-  SET_BIT(csport, cspinmask);
+  //SET_BIT(csport, cspinmask);
 }
 
 
 // Pass 8-bit (each) R,G,B, get back 16-bit packed color
-uint16_t Adafruit_ILI9340::Color565(uint8_t r, uint8_t g, uint8_t b) {
+uint16_t ILI9340::Color565(uint8_t r, uint8_t g, uint8_t b) {
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
 
-void Adafruit_ILI9340::setRotation(uint8_t m) {
+void ILI9340::setRotation(uint8_t m) {
 
   writecommand(ILI9340_MADCTL);
   rotation = m % 4; // can't be higher than 3
@@ -509,15 +460,15 @@ void Adafruit_ILI9340::setRotation(uint8_t m) {
 }
 
 
-void Adafruit_ILI9340::invertDisplay(boolean i) {
+void ILI9340::invertDisplay(boolean i) {
   writecommand(i ? ILI9340_INVON : ILI9340_INVOFF);
 }
 
 
 ////////// stuff not actively being used, but kept for posterity
 
-
-uint8_t Adafruit_ILI9340::spiread(void) {
+/*
+uint8_t ILI9340::spiread(void) {
   uint8_t r = 0;
 
   if (hwSPI) {
@@ -544,7 +495,7 @@ uint8_t Adafruit_ILI9340::spiread(void) {
   return r;
 }
 
- uint8_t Adafruit_ILI9340::readdata(void) {
+ uint8_t ILI9340::readdata(void) {
    digitalWrite(_dc, HIGH);
    digitalWrite(_cs, LOW);
    uint8_t r = spiread();
@@ -554,7 +505,7 @@ uint8_t Adafruit_ILI9340::spiread(void) {
 }
  
 
- uint8_t Adafruit_ILI9340::readcommand8(uint8_t c) {
+ uint8_t ILI9340::readcommand8(uint8_t c) {
    digitalWrite(_dc, LOW);
    digitalWrite(_sclk, LOW);
    digitalWrite(_cs, LOW);
@@ -566,7 +517,7 @@ uint8_t Adafruit_ILI9340::spiread(void) {
    return r;
 }
 
-
+*/
  
 /*
 
@@ -612,3 +563,7 @@ uint8_t Adafruit_ILI9340::spiread(void) {
  }
  
  */
+
+}
+
+// EOF

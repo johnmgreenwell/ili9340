@@ -12,31 +12,18 @@
 
   Written by Limor Fried/Ladyada for Adafruit Industries.
   MIT license, all text above must be included in any redistribution
+
+  Modified to add support for custom HAL support, John Greenwell 2024
  ****************************************************/
 
 #ifndef _ADAFRUIT_ILI9340H_
 #define _ADAFRUIT_ILI9340H_
 
-#if ARDUINO >= 100
- #include "Arduino.h"
- #include "Print.h"
-#else
- #include "WProgram.h"
-#endif
+#include "hal.h"
 #include <Adafruit_GFX.h>
 
-#if defined(__SAM3X8E__)
-  #include <include/pio.h>
-  #define PROGMEM
-  #define pgm_read_byte(addr) (*(const unsigned char *)(addr))
-  #define pgm_read_word(addr) (*(const unsigned short *)(addr))
-  typedef unsigned char prog_uchar;
-#elif defined(__AVR__)
-  #include <avr/pgmspace.h>
-#elif defined(ESP8266)
-  #include <pgmspace.h>
-#endif
-
+namespace PeripheralIO
+{
 
 #define ILI9340_TFTWIDTH  240
 #define ILI9340_TFTHEIGHT 320
@@ -119,13 +106,11 @@
 #define ILI9340_WHITE   0xFFFF
 
 
-class Adafruit_ILI9340 : public Adafruit_GFX {
+class ILI9340 : public Adafruit_GFX {
 
  public:
 
-  Adafruit_ILI9340(uint8_t CS, uint8_t RS, uint8_t MOSI, uint8_t SCLK,
-		   uint8_t RST, uint8_t MISO);
-  Adafruit_ILI9340(uint8_t CS, uint8_t RS, uint8_t RST);
+  ILI9340(HAL::SPI& spi, uint8_t cs, uint8_t dc, uint8_t rst);
 
   void     begin(void),
            setAddrWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1),
@@ -156,26 +141,13 @@ class Adafruit_ILI9340 : public Adafruit_GFX {
   uint8_t  spiread(void);
 
  private:
-  uint8_t  tabcolor;
+  HAL::SPI  _spi;
+  HAL::GPIO _cs;
+  HAL::GPIO _dc;
+  HAL::GPIO _rst;
 
-
-
-  boolean  hwSPI;
-#ifdef __AVR__  
-  volatile uint8_t *mosiport, *clkport, *dcport, *rsport, *csport;
-  uint8_t  _cs, _dc, _rst, _mosi, _miso, _sclk,
-           mosipinmask, clkpinmask, cspinmask, dcpinmask;
-#endif //  #ifdef __AVR__
-#if defined(__SAM3X8E__)
-  Pio *mosiport, *clkport, *dcport, *rsport, *csport;
-  uint32_t  _cs, _dc, _rst, _mosi, _miso, _sclk,
-            mosipinmask, clkpinmask, cspinmask, dcpinmask;
-#endif //  #if defined(__SAM3X8E__)
-#if (defined(__arm__) && defined(CORE_TEENSY)) || defined(ESP8266)
-  volatile uint8_t *mosiport, *clkport, *dcport, *rsport, *csport;
-  uint8_t  _cs, _dc, _rst, _mosi, _miso, _sclk,
-           mosipinmask, clkpinmask, cspinmask, dcpinmask;
-#endif
 };
+
+}
 
 #endif
