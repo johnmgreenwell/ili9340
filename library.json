@@ -1,11 +1,11 @@
 {
-    "name": "pcd8544",
+    "name": "ili9340",
     "version": "1.0.0",
-    "description": "Portable, multi-instance driver for PCD8544 LCDs",
+    "description": "Portable, multi-instance driver for ILI9340 TFT LCDs",
     "keywords": "embedded, driver, hal, lcd, nokia",
     "repository": {
         "type": "git",
-        "url": "https://github.com/johnmgreenwell/pcd8544"
+        "url": "https://github.com/johnmgreenwell/ili9340"
     },
     "license": "MIT",
     "frameworks": "*",
