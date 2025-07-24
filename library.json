@@ -11,7 +11,8 @@
     "frameworks": "*",
     "platforms": "*",
 	"dependencies": {
-        "Adafruit GFX Library": "https://github.com/adafruit/Adafruit-GFX-Library.git"
+        "Adafruit GFX Library": "https://github.com/adafruit/Adafruit-GFX-Library.git",
+        "Adafruit BusIO Library": "https://github.com/adafruit/Adafruit_BusIO.git"
     },
     "build": {
         "flags": [
